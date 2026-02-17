@@ -1,5 +1,7 @@
 # NumberblockToysPrint
 
+🚀 **[Live Demo](https://kylemath.github.io/NumberblockToysPrint)** 🚀
+
 Print out numberblock toys and faces
 
 ## Getting Started
