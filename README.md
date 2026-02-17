@@ -2,7 +2,15 @@
 
 🚀 **[Live Demo](https://kylemath.github.io/NumberblockToysPrint)** 🚀
 
-Print out numberblock toys and faces
+Print out numberblock toys and faces — generates AMS-ready multi-color faceplates for 3D printed Numberblocks toys.
+
+## Screenshots
+
+### 3D Printed Toys
+![3D Printed Numberblocks Toys](screenshot.png)
+
+### Faceplate Factory App
+![Numberblocks Faceplate Factory App](screenshotApp.png)
 
 ## Getting Started
 
