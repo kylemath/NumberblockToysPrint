@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-13.5 -13.5 27 27" width="270" height="270">
+  <!-- Numberblocks: ONE — 4 AMS colors -->
+  <!-- #D52B2B Red bg | #9B1B20 Dark red hood+mouth | #FFFFFF White | #222222 Black -->
+
+  <!-- Red background -->
+  <rect x="-13.5" y="-13.5" width="27" height="27" fill="#D52B2B"/>
+
+  <!-- Dark red "hood" outline (eye surround) -->
+  <circle cx="0" cy="-1.5" r="7.8" fill="#9B1B20"/>
+  <!-- Hood connector to mouth -->
+  <rect x="-2.8" y="3" width="5.6" height="2.5" rx="0.5" fill="#9B1B20"/>
+  <!-- Mouth surround (lips) -->
+  <ellipse cx="0" cy="7.5" rx="5.2" ry="3.2" fill="#9B1B20"/>
+
+  <!-- White eye -->
+  <circle cx="0" cy="-1.5" r="6" fill="#FFFFFF"/>
+
+  <!-- Black pupil -->
+  <circle cx="0" cy="-0.5" r="3.5" fill="#222222"/>
+
+  <!-- Pupil highlight -->
+  <circle cx="-1.8" cy="-2.2" r="0.9" fill="#FFFFFF"/>
+
+  <!-- Mouth interior (same dark red) -->
+  <ellipse cx="0" cy="8" rx="3.8" ry="2.2" fill="#9B1B20"/>
+
+  <!-- Teeth -->
+  <rect x="-3.2" y="5.8" width="6.4" height="2.4" rx="0.6" fill="#FFFFFF"/>
+</svg>

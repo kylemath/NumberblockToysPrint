@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-13.5 -13.5 27 27" width="270" height="270">
+  <!-- Numberblocks: TWO — 5 AMS colors -->
+  <!-- #F5A623 Orange bg | #7B5EA7 Purple glasses | #FFFFFF White | #222222 Black | #B5647D Pink mouth -->
+
+  <!-- Orange background -->
+  <rect x="-13.5" y="-13.5" width="27" height="27" fill="#F5A623"/>
+
+  <!-- Purple glasses frame -->
+  <ellipse cx="-4.5" cy="-2" rx="5.2" ry="5.8" fill="#7B5EA7"/>
+  <ellipse cx="4.5" cy="-2" rx="5.2" ry="5.8" fill="#7B5EA7"/>
+  <!-- Bridge -->
+  <rect x="-1.5" y="-3.5" width="3" height="2.5" rx="1" fill="#7B5EA7"/>
+  <!-- Left temple -->
+  <rect x="-10.5" y="-3" width="2.5" height="1.5" rx="0.7" fill="#7B5EA7"/>
+  <!-- Right temple -->
+  <rect x="8" y="-3" width="2.5" height="1.5" rx="0.7" fill="#7B5EA7"/>
+
+  <!-- White eyes -->
+  <ellipse cx="-4.5" cy="-2" rx="3.5" ry="4.2" fill="#FFFFFF"/>
+  <ellipse cx="4.5" cy="-2" rx="3.5" ry="4.2" fill="#FFFFFF"/>
+
+  <!-- Black pupils -->
+  <circle cx="-4.8" cy="-1.5" r="2.3" fill="#222222"/>
+  <circle cx="4.2" cy="-1.5" r="2.3" fill="#222222"/>
+
+  <!-- Pupil highlights -->
+  <circle cx="-5.8" cy="-2.8" r="0.65" fill="#FFFFFF"/>
+  <circle cx="3.2" cy="-2.8" r="0.65" fill="#FFFFFF"/>
+
+  <!-- Pink mouth -->
+  <ellipse cx="-0.5" cy="7.5" rx="4" ry="2.5" fill="#B5647D"/>
+  <!-- Teeth -->
+  <rect x="-3" y="6.2" width="4.5" height="1.8" rx="0.5" fill="#FFFFFF"/>
+  <!-- Mouth interior (same pink) -->
+  <ellipse cx="-0.5" cy="8.5" rx="2.5" ry="1.3" fill="#B5647D"/>
+</svg>

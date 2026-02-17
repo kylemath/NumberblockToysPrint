@@ -1,0 +1,11 @@
+{
+  "id": "NumberblockToysPrint",
+  "title": "NumberblockToysPrint",
+  "oneLiner": "Print out numberblock toys and faces",
+  "demoUrl": "https://kylemath.github.io/NumberblockToysPrint",
+  "screenshot": "https://raw.githubusercontent.com/kylemath/NumberblockToysPrint/main/screenshot.png",
+  "kind": "project",
+  "categories": ["3dprint", "numberblocks", "toys"],
+  "tags": ["3dprint", "numberblocks", "toys"],
+  "status": "published"
+}

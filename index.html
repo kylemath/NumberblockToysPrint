@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Numberblocks Faceplate Factory</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/imagetracerjs@1.2.6/imagetracer_v1.2.6.min.js"></script>
+    
+    <style>
+        :root { --primary: #ff4757; --dark: #2f3542; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f1f2f6; display: flex; flex-direction: column; align-items: center; padding: 20px; color: var(--dark); }
+        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); max-width: 500px; width: 100%; }
+        h1 { margin-top: 0; color: var(--dark); font-size: 1.5rem; text-align: center; }
+        
+        .face-selector { width: 100%; padding: 10px 14px; font-size: 1rem; border: 2px solid #ced6e0; border-radius: 8px; margin-bottom: 15px; cursor: pointer; background: white; color: var(--dark); }
+        .face-selector:focus { border-color: var(--primary); outline: none; }
+        
+        .upload-box { border: 2px dashed #ced6e0; border-radius: 8px; padding: 20px; text-align: center; cursor: pointer; transition: 0.2s; margin-bottom: 15px; display: block; }
+        .upload-box:hover { border-color: var(--primary); background: #fff0f1; }
+        input[type="file"] { display: none; }
+        
+        .controls { display: grid; gap: 15px; margin-bottom: 20px; }
+        label { font-weight: 600; font-size: 0.9rem; display: flex; justify-content: space-between; }
+        
+        canvas { width: 100%; border-radius: 4px; border: 1px solid #dfe4ea; image-rendering: pixelated; }
+        
+        .swatches { display: flex; gap: 8px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
+        .swatch { width: 32px; height: 32px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        
+        button { background: var(--primary); color: white; border: none; padding: 12px; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; width: 100%; transition: 0.2s; }
+        button:disabled { background: #ced6e0; cursor: not-allowed; }
+        button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(255, 71, 87, 0.3); }
+        
+        .status { font-size: 0.85rem; color: #747d8c; text-align: center; margin-top: 10px; height: 1.2em; }
+        
+        .debug-section { margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #dfe4ea; }
+        .debug-section h3 { margin: 0 0 10px 0; font-size: 1rem; color: var(--dark); }
+        .debug-toggle { background: #57606f; margin-top: 10px; }
+        .debug-step { margin: 10px 0; padding: 10px; background: white; border-radius: 4px; font-size: 0.85rem; }
+        .debug-step strong { color: var(--primary); }
+        .debug-canvas { width: 100%; max-width: 200px; border: 1px solid #dfe4ea; border-radius: 4px; margin: 5px; }
+        .debug-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Numberblocks Faceplate Factory</h1>
+    <p style="font-size: 0.85rem; color: #57606f; text-align: center; margin: -10px 0 15px;">
+        Creates AMS-ready faceplates with inlaid multi-color face details
+    </p>
+    
+    <select id="faceSelect" class="face-selector">
+        <option value="">-- Select a Numberblock Face --</option>
+        <option value="one">1 - One (Red)</option>
+        <option value="two">2 - Two (Orange)</option>
+        <option value="three">3 - Three (Yellow)</option>
+        <option value="custom">Custom Image Upload</option>
+    </select>
+    
+    <div id="customSection" class="hidden">
+    <label class="upload-box">
+        <input type="file" id="imgInput" accept="image/*">
+            <span>📸 Upload Face Image (Click or Drag)</span>
+    </label>
+    <div class="controls">
+        <label>Color Complexity: <span id="colorVal">3</span>
+            <input type="range" id="colorRange" min="2" max="5" value="3" step="1">
+        </label>
+        </div>
+    </div>
+    
+    <label class="upload-box" id="stlBox">
+        <input type="file" id="stlInput" accept=".stl">
+        <span id="stlLabel">🔩 Upload face.stl (for exact male connector)</span>
+    </label>
+
+        <canvas id="previewCanvas" width="256" height="256"></canvas>
+        <div id="swatches" class="swatches"></div>
+
+    <button id="downloadBtn" disabled>Download .3MF (AMS Multi-Color)</button>
+    <div class="status" id="statusMsg">Select a face to begin</div>
+    
+    <button class="debug-toggle" id="debugToggle">🔍 Show Debug Info</button>
+    
+    <div class="debug-section hidden" id="debugSection">
+        <h3>Processing Pipeline Debug</h3>
+        <div id="debugOutput"></div>
+    </div>
+</div>
+
+<script>
+    // ==========================================
+    // NUMBERBLOCKS FACEPLATE FACTORY
+    // ==========================================
+    // Oriented FACE-DOWN for printing (face on build plate = smooth).
+    //
+    // Cross-section (print order, bottom to top):
+    //   Z=0.0mm   ┌────────┐ ← Face surface (on build plate)
+    //             │Color 27│ ← Multi-color inlay (27x27mm, 0.8mm)
+    //   Z=0.8mm  ┌┴────────┴┐ ← face.stl starts here (no overlap)
+    //            │ Plate 28  │ ← face.stl chamfered plate (28mm)
+    //            └──┬────┬───┘
+    //               │Stud│     ← Male stud from face.stl
+    //               └────┘
+    // ==========================================
+
+    // --- CONFIGURATION (matches face.scad) ---
+    const TARGET_SIZE_MM = 28.0;
+    const BASE_HEIGHT = 1.6;
+    const INLAY_DEPTH = 0.8;
+    const CANVAS_RES = 256;
+    const GRID_RES = 70;
+    const CHAMFER_SIZE = 0.5;
+
+    // --- FACE TEMPLATES ---
+    // Each template has an SVG and a print-optimized palette (colors grouped for AMS).
+    // SVGs use these exact palette hex values so pixel mapping is clean.
+    const FACE_TEMPLATES = {
+        one: {
+            name: "One",
+            palette: [
+                { r: 213, g: 43, b: 43 },   // #D52B2B - Red background
+                { r: 155, g: 27, b: 32 },   // #9B1B20 - Dark red (hood + mouth)
+                { r: 255, g: 255, b: 255 }, // #FFFFFF - White (eye + teeth)
+                { r: 34, g: 34, b: 34 },    // #222222 - Black (pupil)
+            ],
+            shapes: [
+                { t:'r', x:-13.5, y:-13.5, w:27, h:27, ci:0 },
+                { t:'c', cx:0, cy:-1.5, r:7.8, ci:1 },
+                { t:'r', x:-2.8, y:3, w:5.6, h:2.5, ci:1 },
+                { t:'e', cx:0, cy:7.5, rx:5.2, ry:3.2, ci:1 },
+                { t:'c', cx:0, cy:-1.5, r:6, ci:2 },
+                { t:'c', cx:0, cy:-0.5, r:3.5, ci:3 },
+                { t:'c', cx:-1.8, cy:-2.2, r:0.9, ci:2 },
+                { t:'e', cx:0, cy:8, rx:3.8, ry:2.2, ci:1 },
+                { t:'r', x:-3.2, y:5.8, w:6.4, h:2.4, ci:2 },
+            ],
+            svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-13.5 -13.5 27 27" width="270" height="270">
+                <rect x="-13.5" y="-13.5" width="27" height="27" fill="#D52B2B"/>
+                <circle cx="0" cy="-1.5" r="7.8" fill="#9B1B20"/>
+                <rect x="-2.8" y="3" width="5.6" height="2.5" rx="0.5" fill="#9B1B20"/>
+                <ellipse cx="0" cy="7.5" rx="5.2" ry="3.2" fill="#9B1B20"/>
+                <circle cx="0" cy="-1.5" r="6" fill="#FFFFFF"/>
+                <circle cx="0" cy="-0.5" r="3.5" fill="#222222"/>
+                <circle cx="-1.8" cy="-2.2" r="0.9" fill="#FFFFFF"/>
+                <ellipse cx="0" cy="8" rx="3.8" ry="2.2" fill="#9B1B20"/>
+                <rect x="-3.2" y="5.8" width="6.4" height="2.4" rx="0.6" fill="#FFFFFF"/>
+            </svg>`
+        },
+        two: {
+            name: "Two",
+            palette: [
+                { r: 245, g: 166, b: 35 },  // #F5A623 - Orange background
+                { r: 123, g: 94, b: 167 },  // #7B5EA7 - Purple (glasses)
+                { r: 255, g: 255, b: 255 }, // #FFFFFF - White (eyes + teeth)
+                { r: 34, g: 34, b: 34 },    // #222222 - Black (pupils)
+                { r: 181, g: 100, b: 125 }, // #B5647D - Pink (mouth)
+            ],
+            shapes: [
+                { t:'r', x:-13.5, y:-13.5, w:27, h:27, ci:0 },
+                { t:'e', cx:-4.5, cy:-2, rx:5.2, ry:5.8, ci:1 },
+                { t:'e', cx:4.5, cy:-2, rx:5.2, ry:5.8, ci:1 },
+                { t:'r', x:-1.5, y:-3.5, w:3, h:2.5, ci:1 },
+                { t:'r', x:-10.5, y:-3, w:2.5, h:1.5, ci:1 },
+                { t:'r', x:8, y:-3, w:2.5, h:1.5, ci:1 },
+                { t:'e', cx:-4.5, cy:-2, rx:3.5, ry:4.2, ci:2 },
+                { t:'e', cx:4.5, cy:-2, rx:3.5, ry:4.2, ci:2 },
+                { t:'c', cx:-4.8, cy:-1.5, r:2.3, ci:3 },
+                { t:'c', cx:4.2, cy:-1.5, r:2.3, ci:3 },
+                { t:'c', cx:-5.8, cy:-2.8, r:0.65, ci:2 },
+                { t:'c', cx:3.2, cy:-2.8, r:0.65, ci:2 },
+                { t:'e', cx:-0.5, cy:7.5, rx:4, ry:2.5, ci:4 },
+                { t:'r', x:-3, y:6.2, w:4.5, h:1.8, ci:2 },
+                { t:'e', cx:-0.5, cy:8.5, rx:2.5, ry:1.3, ci:4 },
+            ],
+            svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-13.5 -13.5 27 27" width="270" height="270">
+                <rect x="-13.5" y="-13.5" width="27" height="27" fill="#F5A623"/>
+                <ellipse cx="-4.5" cy="-2" rx="5.2" ry="5.8" fill="#7B5EA7"/>
+                <ellipse cx="4.5" cy="-2" rx="5.2" ry="5.8" fill="#7B5EA7"/>
+                <rect x="-1.5" y="-3.5" width="3" height="2.5" rx="1" fill="#7B5EA7"/>
+                <rect x="-10.5" y="-3" width="2.5" height="1.5" rx="0.7" fill="#7B5EA7"/>
+                <rect x="8" y="-3" width="2.5" height="1.5" rx="0.7" fill="#7B5EA7"/>
+                <ellipse cx="-4.5" cy="-2" rx="3.5" ry="4.2" fill="#FFFFFF"/>
+                <ellipse cx="4.5" cy="-2" rx="3.5" ry="4.2" fill="#FFFFFF"/>
+                <circle cx="-4.8" cy="-1.5" r="2.3" fill="#222222"/>
+                <circle cx="4.2" cy="-1.5" r="2.3" fill="#222222"/>
+                <circle cx="-5.8" cy="-2.8" r="0.65" fill="#FFFFFF"/>
+                <circle cx="3.2" cy="-2.8" r="0.65" fill="#FFFFFF"/>
+                <ellipse cx="-0.5" cy="7.5" rx="4" ry="2.5" fill="#B5647D"/>
+                <rect x="-3" y="6.2" width="4.5" height="1.8" rx="0.5" fill="#FFFFFF"/>
+                <ellipse cx="-0.5" cy="8.5" rx="2.5" ry="1.3" fill="#B5647D"/>
+            </svg>`
+        },
+        three: {
+            name: "Three",
+            palette: [
+                { r: 255, g: 215, b: 0 },   // #FFD700 - Yellow background
+                { r: 212, g: 32, b: 39 },   // #D42027 - Red (crown + mouth)
+                { r: 224, g: 149, b: 48 },  // #E09530 - Orange (eye circles)
+                { r: 255, g: 255, b: 255 }, // #FFFFFF - White (eyes + teeth + crown tips)
+                { r: 34, g: 34, b: 34 },    // #222222 - Black (pupils)
+            ],
+            shapes: [
+                { t:'r', x:-13.5, y:-13.5, w:27, h:27, ci:0 },
+                { t:'p', pts:[[-7.5,-13.5],[-7.5,-8],[-4,-10.5],[0,-6.5],[4,-10.5],[7.5,-8],[7.5,-13.5]], ci:1 },
+                { t:'c', cx:-4, cy:-11.2, r:1.2, ci:3 },
+                { t:'c', cx:0, cy:-7.5, r:1.2, ci:3 },
+                { t:'c', cx:4, cy:-11.2, r:1.2, ci:3 },
+                { t:'c', cx:-4.5, cy:-0.5, r:5.8, ci:2 },
+                { t:'c', cx:4.5, cy:-0.5, r:5.8, ci:2 },
+                { t:'e', cx:-4.5, cy:-0.5, rx:3.5, ry:4.2, ci:3 },
+                { t:'e', cx:4.5, cy:-0.5, rx:3.5, ry:4.2, ci:3 },
+                { t:'c', cx:-4.8, cy:0, r:2.3, ci:4 },
+                { t:'c', cx:4.2, cy:0, r:2.3, ci:4 },
+                { t:'c', cx:-5.8, cy:-1.5, r:0.65, ci:3 },
+                { t:'c', cx:3.2, cy:-1.5, r:0.65, ci:3 },
+                { t:'e', cx:0, cy:7.5, rx:5.5, ry:3.5, ci:1 },
+                { t:'r', x:-4, y:5.5, w:8, h:2.8, ci:3 },
+                { t:'e', cx:0, cy:9, rx:4, ry:2, ci:1 },
+            ],
+            svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-13.5 -13.5 27 27" width="270" height="270">
+                <rect x="-13.5" y="-13.5" width="27" height="27" fill="#FFD700"/>
+                <polygon points="-7.5,-13.5 -7.5,-8 -4,-10.5 0,-6.5 4,-10.5 7.5,-8 7.5,-13.5" fill="#D42027"/>
+                <circle cx="-4" cy="-11.2" r="1.2" fill="#FFFFFF"/>
+                <circle cx="0" cy="-7.5" r="1.2" fill="#FFFFFF"/>
+                <circle cx="4" cy="-11.2" r="1.2" fill="#FFFFFF"/>
+                <circle cx="-4.5" cy="-0.5" r="5.8" fill="#E09530"/>
+                <circle cx="4.5" cy="-0.5" r="5.8" fill="#E09530"/>
+                <ellipse cx="-4.5" cy="-0.5" rx="3.5" ry="4.2" fill="#FFFFFF"/>
+                <ellipse cx="4.5" cy="-0.5" rx="3.5" ry="4.2" fill="#FFFFFF"/>
+                <circle cx="-4.8" cy="0" r="2.3" fill="#222222"/>
+                <circle cx="4.2" cy="0" r="2.3" fill="#222222"/>
+                <circle cx="-5.8" cy="-1.5" r="0.65" fill="#FFFFFF"/>
+                <circle cx="3.2" cy="-1.5" r="0.65" fill="#FFFFFF"/>
+                <ellipse cx="0" cy="7.5" rx="5.5" ry="3.5" fill="#D42027"/>
+                <rect x="-4" y="5.5" width="8" height="2.8" rx="0.6" fill="#FFFFFF"/>
+                <ellipse cx="0" cy="9" rx="4" ry="2" fill="#D42027"/>
+            </svg>`
+        }
+    };
+
+    // --- DIRECT RASTERIZER (bypasses canvas color space issues) ---
+    function rasterizeTemplate(template) {
+        const colorMap = new Uint8Array(GRID_RES * GRID_RES);
+        const scale = 27 / GRID_RES;
+        const half = 13.5;
+
+        for (let py = 0; py < GRID_RES; py++) {
+            for (let px = 0; px < GRID_RES; px++) {
+                const x = -half + (px + 0.5) * scale;
+                const y = -half + (py + 0.5) * scale;
+                let ci = 0;
+                for (const s of template.shapes) {
+                    if (shapeHit(s, x, y)) ci = s.ci;
+                }
+                colorMap[py * GRID_RES + px] = ci;
+            }
+        }
+        return colorMap;
+    }
+
+    function shapeHit(s, x, y) {
+        switch (s.t) {
+            case 'c': {
+                const dx = x - s.cx, dy = y - s.cy;
+                return dx * dx + dy * dy <= s.r * s.r;
+            }
+            case 'e': {
+                const dx = (x - s.cx) / s.rx, dy = (y - s.cy) / s.ry;
+                return dx * dx + dy * dy <= 1;
+            }
+            case 'r':
+                return x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h;
+            case 'p':
+                return pointInPoly(x, y, s.pts);
+        }
+        return false;
+    }
+
+    function pointInPoly(x, y, pts) {
+        let inside = false;
+        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+            const xi = pts[i][0], yi = pts[i][1];
+            const xj = pts[j][0], yj = pts[j][1];
+            if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) {
+                inside = !inside;
+            }
+        }
+        return inside;
+    }
+
+    // --- STATE ---
+    let rawImg = null;
+    let stlVertices = null;
+    let activeTemplate = null;
+
+    const canvas = document.getElementById('previewCanvas');
+    const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
+    const statusMsg = document.getElementById('statusMsg');
+    const debugOutput = document.getElementById('debugOutput');
+    let debugMode = false;
+
+    // --- DEBUG HELPERS ---
+    function addDebugStep(title, content) {
+        if (!debugMode) return;
+        const step = document.createElement('div');
+        step.className = 'debug-step';
+        step.innerHTML = `<strong>${title}</strong><br>${content}`;
+        debugOutput.appendChild(step);
+    }
+
+    function addDebugCanvas(title, imageData) {
+        if (!debugMode) return;
+        const step = document.createElement('div');
+        step.className = 'debug-step';
+        const debugCanvas = document.createElement('canvas');
+        debugCanvas.className = 'debug-canvas';
+        debugCanvas.width = imageData.width;
+        debugCanvas.height = imageData.height;
+        debugCanvas.getContext('2d').putImageData(imageData, 0, 0);
+        step.innerHTML = `<strong>${title}</strong><br>`;
+        step.appendChild(debugCanvas);
+        debugOutput.appendChild(step);
+    }
+
+    function clearDebug() { debugOutput.innerHTML = ''; }
+
+    document.getElementById('debugToggle').addEventListener('click', () => {
+        debugMode = !debugMode;
+        document.getElementById('debugSection').classList.toggle('hidden');
+        document.getElementById('debugToggle').innerText = debugMode ? '🔍 Hide Debug Info' : '🔍 Show Debug Info';
+    });
+
+    // --- SVG RENDERING HELPER ---
+    function renderSVGToCanvas(svgStr, width, height) {
+        return new Promise((resolve, reject) => {
+            const hiRes = 4;
+            const hiW = width * hiRes;
+            const hiH = height * hiRes;
+            const svgSized = svgStr.replace(
+                /width="[^"]*"\s*height="[^"]*"/,
+                `width="${hiW}" height="${hiH}"`
+            );
+            const blob = new Blob([svgSized], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const img = new Image();
+            img.onload = () => {
+                const hiCanvas = document.createElement('canvas');
+                hiCanvas.width = hiW;
+                hiCanvas.height = hiH;
+                const hiCtx = hiCanvas.getContext('2d', { colorSpace: 'srgb' });
+                hiCtx.drawImage(img, 0, 0, hiW, hiH);
+
+                const c = document.createElement('canvas');
+                c.width = width;
+                c.height = height;
+                const cx = c.getContext('2d', { colorSpace: 'srgb' });
+                cx.imageSmoothingEnabled = false;
+                cx.drawImage(hiCanvas, 0, 0, width, height);
+                URL.revokeObjectURL(url);
+                resolve(cx.getImageData(0, 0, width, height, { colorSpace: 'srgb' }));
+            };
+            img.onerror = () => {
+                URL.revokeObjectURL(url);
+                reject(new Error('Failed to render SVG'));
+            };
+            img.src = url;
+        });
+    }
+
+    // --- FACE SELECTOR ---
+    document.getElementById('faceSelect').addEventListener('change', async (e) => {
+        const val = e.target.value;
+        const customSection = document.getElementById('customSection');
+
+        if (val === 'custom') {
+            customSection.classList.remove('hidden');
+            activeTemplate = null;
+            if (rawImg) {
+                processImage();
+            } else {
+                canvas.width = CANVAS_RES;
+                canvas.height = CANVAS_RES;
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                document.getElementById('swatches').innerHTML = '';
+                document.getElementById('downloadBtn').disabled = true;
+                statusMsg.innerText = 'Upload an image to begin.';
+            }
+        } else if (val && FACE_TEMPLATES[val]) {
+            customSection.classList.add('hidden');
+            activeTemplate = val;
+            await renderTemplate(val);
+        } else {
+            customSection.classList.add('hidden');
+            activeTemplate = null;
+            canvas.width = CANVAS_RES;
+            canvas.height = CANVAS_RES;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            document.getElementById('swatches').innerHTML = '';
+            document.getElementById('downloadBtn').disabled = true;
+            statusMsg.innerText = 'Select a face to begin.';
+        }
+    });
+
+    async function renderTemplate(key) {
+        const template = FACE_TEMPLATES[key];
+        if (!template) return;
+
+        const imageData = await renderSVGToCanvas(template.svg, CANVAS_RES, CANVAS_RES);
+        canvas.width = CANVAS_RES;
+        canvas.height = CANVAS_RES;
+        ctx.putImageData(imageData, 0, 0);
+
+        const swatchesDiv = document.getElementById('swatches');
+        swatchesDiv.innerHTML = '';
+        template.palette.forEach(c => {
+            const hex = rgbToHex(c.r, c.g, c.b);
+            const swatch = document.createElement('div');
+            swatch.className = 'swatch';
+            swatch.style.background = hex;
+            swatch.title = hex;
+            swatchesDiv.appendChild(swatch);
+        });
+
+        document.getElementById('downloadBtn').disabled = false;
+        statusMsg.innerText = `${template.name} face loaded. ${template.palette.length} AMS colors. Ready to generate.`;
+    }
+
+    // --- STL INPUT ---
+    document.getElementById('stlInput').addEventListener('change', e => {
+        if (e.target.files && e.target.files[0]) {
+            const reader = new FileReader();
+            reader.onload = evt => {
+                try {
+                    stlVertices = parseSTL(evt.target.result);
+                    const numTris = stlVertices.length / 9;
+                    document.getElementById('stlLabel').innerText = `✅ face.stl loaded (${numTris} triangles)`;
+                    document.getElementById('stlBox').style.borderColor = '#2ed573';
+                    statusMsg.innerText = `STL loaded: ${numTris} triangles. Ready.`;
+                } catch(err) {
+                    document.getElementById('stlLabel').innerText = `❌ Error: ${err.message}`;
+                    document.getElementById('stlBox').style.borderColor = '#ff4757';
+                    stlVertices = null;
+                }
+            };
+            reader.readAsArrayBuffer(e.target.files[0]);
+        }
+    });
+
+    // --- CUSTOM IMAGE INPUT ---
+    document.getElementById('imgInput').addEventListener('change', e => {
+        if(e.target.files && e.target.files[0]) {
+            const reader = new FileReader();
+            reader.onload = evt => {
+                const img = new Image();
+                img.onload = () => { rawImg = img; processImage(); };
+                img.src = evt.target.result;
+            };
+            reader.readAsDataURL(e.target.files[0]);
+        }
+    });
+
+    document.getElementById('colorRange').addEventListener('input', e => {
+        document.getElementById('colorVal').innerText = e.target.value;
+        processImage();
+    });
+
+    function processImage() {
+        if(!rawImg) return;
+        if(debugMode) clearDebug();
+        
+        const size = Math.min(rawImg.width, rawImg.height);
+        const sx = (rawImg.width - size) / 2;
+        const sy = (rawImg.height - size) / 2;
+
+        addDebugStep('Image Input', `${rawImg.width}x${rawImg.height}px → crop ${size}x${size}px`);
+        
+        canvas.width = CANVAS_RES;
+        canvas.height = CANVAS_RES;
+        ctx.drawImage(rawImg, sx, sy, size, size, 0, 0, CANVAS_RES, CANVAS_RES);
+        
+        statusMsg.innerText = "Preview Updated. Ready to Generate.";
+        document.getElementById('downloadBtn').disabled = false;
+    }
+
+    // --- MAIN GENERATION ---
+    document.getElementById('downloadBtn').addEventListener('click', async () => {
+        const btn = document.getElementById('downloadBtn');
+        btn.disabled = true;
+        btn.innerText = "Processing Geometry...";
+        statusMsg.innerText = "Generating 3D mesh...";
+
+        if(debugMode) clearDebug();
+
+        const startTime = performance.now();
+
+        try {
+
+        await new Promise(r => setTimeout(r, 50));
+
+        let paletteArr;
+        let colorMap;
+        let colorCounts;
+
+        const INLAY_SIZE = TARGET_SIZE_MM - 2 * CHAMFER_SIZE;
+        const pixelSize = INLAY_SIZE / GRID_RES;
+        const halfInlay = INLAY_SIZE / 2;
+        const inlayZBottom = 0;
+        const inlayZTop = INLAY_DEPTH;
+
+        if (activeTemplate && FACE_TEMPLATES[activeTemplate]) {
+            // === TEMPLATE MODE: Direct math rasterization (no canvas, no color space issues) ===
+            const template = FACE_TEMPLATES[activeTemplate];
+            paletteArr = template.palette;
+
+            addDebugStep('Mode: Direct Rasterization',
+                `Face: <strong>${template.name}</strong><br>` +
+                `Method: Shape math (point-in-circle/ellipse/polygon)<br>` +
+                `No canvas rendering — exact palette colors guaranteed<br>` +
+                `Palette: ${paletteArr.length} AMS colors`);
+
+            colorMap = rasterizeTemplate(template);
+            colorCounts = new Array(paletteArr.length).fill(0);
+            for (let i = 0; i < colorMap.length; i++) colorCounts[colorMap[i]]++;
+
+            addDebugStep('Rasterization Complete',
+                `Grid: ${GRID_RES}x${GRID_RES} (${pixelSize.toFixed(3)}mm/pixel)<br>` +
+                `Every pixel is an exact palette color (no anti-aliasing artifacts)`);
+
+        } else {
+            // === CUSTOM IMAGE MODE: Use ImageTracer quantization ===
+            const numColors = parseInt(document.getElementById('colorRange').value);
+
+            addDebugStep('Mode: Custom Image',
+                `Colors: ${numColors}<br>Algorithm: ImageTracer median-cut`);
+
+            const tracedData = ImageTracer.imagedataToTracedata(
+                ctx.getImageData(0, 0, CANVAS_RES, CANVAS_RES, { colorSpace: 'srgb' }),
+                { numberofcolors: numColors, ltrs: 0, qtrs: 0, scale: 1 }
+            );
+
+            paletteArr = tracedData.palette;
+
+            addDebugStep('Quantization Complete',
+                `Palette: ${paletteArr.length} colors extracted`);
+
+            const gridCanvas = document.createElement('canvas');
+            gridCanvas.width = GRID_RES;
+            gridCanvas.height = GRID_RES;
+            const gridCtx = gridCanvas.getContext('2d', { colorSpace: 'srgb' });
+            gridCtx.drawImage(canvas, 0, 0, GRID_RES, GRID_RES);
+            const gridPixels = gridCtx.getImageData(0, 0, GRID_RES, GRID_RES, { colorSpace: 'srgb' }).data;
+
+            colorMap = new Uint8Array(GRID_RES * GRID_RES);
+            colorCounts = new Array(paletteArr.length).fill(0);
+
+            for (let y = 0; y < GRID_RES; y++) {
+                for (let x = 0; x < GRID_RES; x++) {
+                    const i = (y * GRID_RES + x) * 4;
+                    const r = gridPixels[i], g = gridPixels[i+1], b = gridPixels[i+2];
+
+                    let bestDist = Infinity, bestC = 0;
+                    for (let c = 0; c < paletteArr.length; c++) {
+                        const dr = r - paletteArr[c].r;
+                        const dg = g - paletteArr[c].g;
+                        const db = b - paletteArr[c].b;
+                        const dist = dr*dr + dg*dg + db*db;
+                        if (dist < bestDist) { bestDist = dist; bestC = c; }
+                    }
+                    colorMap[y * GRID_RES + x] = bestC;
+                    colorCounts[bestC]++;
+                }
+            }
+        }
+
+        addDebugStep('Pixel Grid (Face-Down)',
+            `<strong>Orientation: FACE DOWN</strong><br>` +
+            `Grid: ${GRID_RES}x${GRID_RES} (${pixelSize.toFixed(3)}mm/pixel)<br>` +
+            `Inlay: ${INLAY_SIZE}x${INLAY_SIZE}mm, Z=0 to ${INLAY_DEPTH}mm<br>` +
+            `face.stl: ${stlVertices ? '✅ Loaded, starts at Z=' + INLAY_DEPTH + 'mm' : '⚠️ Not loaded'}`);
+
+        // Debug: show quantized color map
+        if (debugMode) {
+            const mapData = new ImageData(GRID_RES, GRID_RES);
+            for (let i = 0; i < GRID_RES * GRID_RES; i++) {
+                const c = paletteArr[colorMap[i]];
+                mapData.data[i*4] = c.r;
+                mapData.data[i*4+1] = c.g;
+                mapData.data[i*4+2] = c.b;
+                mapData.data[i*4+3] = 255;
+            }
+            addDebugCanvas('Quantized Color Map (what gets printed)', mapData);
+
+            addDebugStep('Color Distribution',
+                paletteArr.map((c, i) => {
+                    const hex = rgbToHex(c.r, c.g, c.b);
+                    const pct = ((colorCounts[i] / (GRID_RES*GRID_RES)) * 100).toFixed(1);
+                    return `<span style="display:inline-block;width:18px;height:18px;background:${hex};border:1px solid #000;vertical-align:middle;"></span> ${hex}: ${colorCounts[i]}px (${pct}%)`;
+                }).join('<br>'));
+        }
+
+        // Generate mesh for each color
+        const meshes = [];
+
+        for (let c = 0; c < paletteArr.length; c++) {
+            if (colorCounts[c] === 0) continue;
+
+            const hex = rgbToHex(paletteArr[c].r, paletteArr[c].g, paletteArr[c].b);
+            const vertices = [];
+
+            for (let y = 0; y < GRID_RES; y++) {
+                for (let x = 0; x < GRID_RES; x++) {
+                    if (colorMap[y * GRID_RES + x] !== c) continue;
+
+                    const x0 = -halfInlay + x * pixelSize;
+                    const y0 = -halfInlay + y * pixelSize;
+                    const x1 = x0 + pixelSize;
+                    const y1 = y0 + pixelSize;
+                    const z0 = inlayZBottom;
+                    const z1 = inlayZTop;
+
+                    const left   = x === 0            || colorMap[y * GRID_RES + (x-1)] !== c;
+                    const right  = x === GRID_RES - 1 || colorMap[y * GRID_RES + (x+1)] !== c;
+                    const top    = y === 0            || colorMap[(y-1) * GRID_RES + x] !== c;
+                    const bottom = y === GRID_RES - 1 || colorMap[(y+1) * GRID_RES + x] !== c;
+
+                    // Top face (+Z)
+                    vertices.push(x0,y0,z1, x1,y0,z1, x0,y1,z1);
+                    vertices.push(x0,y1,z1, x1,y0,z1, x1,y1,z1);
+                    // Bottom face (-Z)
+                    vertices.push(x0,y0,z0, x0,y1,z0, x1,y0,z0);
+                    vertices.push(x1,y0,z0, x0,y1,z0, x1,y1,z0);
+                    // Side faces (only at color boundaries)
+                    if (left) {
+                        vertices.push(x0,y0,z0, x0,y0,z1, x0,y1,z0);
+                        vertices.push(x0,y1,z0, x0,y0,z1, x0,y1,z1);
+                    }
+                    if (right) {
+                        vertices.push(x1,y0,z0, x1,y1,z0, x1,y0,z1);
+                        vertices.push(x1,y0,z1, x1,y1,z0, x1,y1,z1);
+                    }
+                    if (top) {
+                        vertices.push(x0,y0,z0, x1,y0,z0, x0,y0,z1);
+                        vertices.push(x0,y0,z1, x1,y0,z0, x1,y0,z1);
+                    }
+                    if (bottom) {
+                        vertices.push(x0,y1,z0, x0,y1,z1, x1,y1,z0);
+                        vertices.push(x1,y1,z0, x0,y1,z1, x1,y1,z1);
+                    }
+                }
+            }
+
+            meshes.push({
+                color: hex,
+                vertices: vertices,
+                name: `Color_${c}_${hex.substring(1)}`,
+                pixelCount: colorCounts[c]
+            });
+
+            addDebugStep(`Mesh: Color ${c}`,
+                `<span style="display:inline-block;width:20px;height:20px;background:${hex};border:1px solid #000;vertical-align:middle;"></span> ${hex} — ` +
+                `${colorCounts[c]} pixels, ${(vertices.length / 9)} triangles`);
+        }
+
+        // Base + stud (background color = most-used color)
+        let bgColorIdx = 0, bgMax = 0;
+        for (let c = 0; c < paletteArr.length; c++) {
+            if (colorCounts[c] > bgMax) { bgMax = colorCounts[c]; bgColorIdx = c; }
+        }
+        const bgHex = rgbToHex(paletteArr[bgColorIdx].r, paletteArr[bgColorIdx].g, paletteArr[bgColorIdx].b);
+
+        const baseVerts = [];
+
+        if (stlVertices) {
+            let minZ = Infinity, maxZ = -Infinity;
+            for (let i = 2; i < stlVertices.length; i += 3) {
+                if (stlVertices[i] < minZ) minZ = stlVertices[i];
+                if (stlVertices[i] > maxZ) maxZ = stlVertices[i];
+            }
+            const zOffset = INLAY_DEPTH - minZ;
+
+            for (let i = 0; i < stlVertices.length; i += 3) {
+                baseVerts.push(
+                    stlVertices[i],
+                    stlVertices[i + 1],
+                    stlVertices[i + 2] + zOffset
+                );
+            }
+
+            addDebugStep('Base + Stud (face.stl)',
+                `<span style="display:inline-block;width:20px;height:20px;background:${bgHex};border:1px solid #000;vertical-align:middle;"></span> ${bgHex}<br>` +
+                `${stlVertices.length / 9} triangles, Z=${INLAY_DEPTH}mm to ${(INLAY_DEPTH + maxZ - minZ).toFixed(1)}mm`);
+        } else {
+            const hp = TARGET_SIZE_MM / 2;
+            const baseZ0 = INLAY_DEPTH;
+            const baseZ1 = INLAY_DEPTH + BASE_HEIGHT;
+            baseVerts.push(-hp,-hp,baseZ1, hp,-hp,baseZ1, -hp,hp,baseZ1);
+            baseVerts.push(-hp,hp,baseZ1, hp,-hp,baseZ1, hp,hp,baseZ1);
+            baseVerts.push(-hp,-hp,baseZ0, -hp,hp,baseZ0, hp,-hp,baseZ0);
+            baseVerts.push(hp,-hp,baseZ0, -hp,hp,baseZ0, hp,hp,baseZ0);
+            baseVerts.push(-hp,-hp,baseZ0, hp,-hp,baseZ0, -hp,-hp,baseZ1);
+            baseVerts.push(-hp,-hp,baseZ1, hp,-hp,baseZ0, hp,-hp,baseZ1);
+            baseVerts.push(-hp,hp,baseZ0, -hp,hp,baseZ1, hp,hp,baseZ0);
+            baseVerts.push(hp,hp,baseZ0, -hp,hp,baseZ1, hp,hp,baseZ1);
+            baseVerts.push(-hp,-hp,baseZ0, -hp,-hp,baseZ1, -hp,hp,baseZ0);
+            baseVerts.push(-hp,hp,baseZ0, -hp,-hp,baseZ1, -hp,hp,baseZ1);
+            baseVerts.push(hp,-hp,baseZ0, hp,hp,baseZ0, hp,-hp,baseZ1);
+            baseVerts.push(hp,-hp,baseZ1, hp,hp,baseZ0, hp,hp,baseZ1);
+
+            addDebugStep('Base Plate (fallback, no STL)',
+                `${TARGET_SIZE_MM}x${TARGET_SIZE_MM}mm plate, Z=${INLAY_DEPTH} to ${INLAY_DEPTH + BASE_HEIGHT}mm<br>` +
+                `⚠️ No stud! Upload face.stl for the male connector.`);
+        }
+
+        meshes.push({
+            color: bgHex,
+            vertices: baseVerts,
+            name: `Base_Stud_${bgHex.substring(1)}`,
+            pixelCount: 0
+        });
+
+        // Build 3MF
+        statusMsg.innerText = "Building 3MF File...";
+
+        addDebugStep('3MF Assembly',
+            `${meshes.length} objects (${meshes.length - 1} inlay colors + 1 base/stud)<br>` +
+            meshes.map((m, i) =>
+                `&nbsp;&nbsp;${i + 1}. <span style="display:inline-block;width:15px;height:15px;background:${m.color};border:1px solid #000;"></span> ${m.name}`
+            ).join('<br>'));
+
+        const blob = await create3MF(meshes);
+
+        const totalTime = ((performance.now() - startTime) / 1000).toFixed(2);
+
+        // Download
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const faceName = activeTemplate ? FACE_TEMPLATES[activeTemplate].name : 'Custom';
+        a.download = `Numberblock_${faceName}_Face.3mf`;
+        a.click();
+        
+        btn.disabled = false;
+        btn.innerText = "Download .3MF (AMS Multi-Color)";
+        statusMsg.innerText = `Done! ${faceName} faceplate generated in ${totalTime}s`;
+
+        if (debugMode) {
+            addDebugStep('✅ Complete',
+                `File: ${(blob.size / 1024).toFixed(1)} KB, ${totalTime}s<br>` +
+                `Model: face-down, inlay Z=0–${INLAY_DEPTH}mm, base Z=${INLAY_DEPTH}mm+`);
+        }
+
+        } catch(error) {
+            console.error('Generation error:', error);
+            statusMsg.innerText = "Error during generation!";
+            btn.disabled = false;
+            btn.innerText = "Download .3MF (AMS Multi-Color)";
+
+            if(debugMode) {
+                addDebugStep('❌ Error',
+                    `<span style="color:red;">${error.message}</span><br>` +
+                    `<pre style="font-size:0.75rem;overflow-x:auto;">${error.stack}</pre>`);
+            } else {
+                alert(`Error: ${error.message}\n\nEnable Debug Mode for details.`);
+            }
+        }
+    });
+
+    // --- VERTEX DEDUPLICATION ---
+    function deduplicateVertices(flatVerts) {
+        const vertMap = new Map();
+        const uniqueVerts = [];
+        const indices = [];
+
+        for (let i = 0; i < flatVerts.length; i += 3) {
+            const x = Math.round(flatVerts[i] * 10000) / 10000;
+            const y = Math.round(flatVerts[i+1] * 10000) / 10000;
+            const z = Math.round(flatVerts[i+2] * 10000) / 10000;
+            const key = `${x},${y},${z}`;
+
+            let idx;
+            if (vertMap.has(key)) {
+                idx = vertMap.get(key);
+            } else {
+                idx = uniqueVerts.length / 3;
+                vertMap.set(key, idx);
+                uniqueVerts.push(x, y, z);
+            }
+            indices.push(idx);
+        }
+
+        return { vertices: uniqueVerts, indices: indices };
+    }
+
+    // --- STL PARSER ---
+    function parseSTL(buffer) {
+        const header = new Uint8Array(buffer, 0, Math.min(80, buffer.byteLength));
+        const headerStr = new TextDecoder().decode(header);
+
+        if (headerStr.trimStart().startsWith('solid')) {
+            const fullText = new TextDecoder().decode(buffer);
+            if (fullText.includes('facet') && fullText.includes('vertex')) {
+                return parseASCIISTL(fullText);
+            }
+        }
+        return parseBinarySTL(buffer);
+    }
+
+    function parseASCIISTL(text) {
+        const vertices = [];
+        const re = /vertex\s+([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)\s+([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)\s+([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)/g;
+        let m;
+        while ((m = re.exec(text)) !== null) {
+            vertices.push(parseFloat(m[1]), parseFloat(m[2]), parseFloat(m[3]));
+        }
+        if (vertices.length === 0) throw new Error('No vertices found in ASCII STL');
+        if (vertices.length % 9 !== 0) throw new Error('Invalid STL vertex count');
+        return vertices;
+    }
+
+    function parseBinarySTL(buffer) {
+        const view = new DataView(buffer);
+        const numTri = view.getUint32(80, true);
+        const vertices = [];
+        let offset = 84;
+        for (let t = 0; t < numTri; t++) {
+            offset += 12;
+            for (let v = 0; v < 3; v++) {
+                vertices.push(
+                    view.getFloat32(offset, true),
+                    view.getFloat32(offset + 4, true),
+                    view.getFloat32(offset + 8, true)
+                );
+                offset += 12;
+            }
+            offset += 2;
+        }
+        return vertices;
+    }
+
+    // --- 3MF WRITER ---
+    async function create3MF(colorMeshes) {
+        const zip = new JSZip();
+        
+        zip.file("[Content_Types].xml",
+            `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>`);
+
+        zip.file("_rels/.rels",
+            `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>`);
+
+        let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel">\n`;
+        xml += `<resources>\n<basematerials id="1">\n`;
+        colorMeshes.forEach(m => {
+            xml += `  <base name="${m.name}" displaycolor="${m.color}" />\n`;
+        });
+        xml += `</basematerials>\n`;
+
+        let pid = 2;
+        colorMeshes.forEach((m, i) => {
+            const deduped = deduplicateVertices(m.vertices);
+            xml += `<object id="${pid}" pid="1" pindex="${i}" type="model">\n<mesh>\n<vertices>\n`;
+            for (let j = 0; j < deduped.vertices.length; j += 3) {
+                xml += `  <vertex x="${deduped.vertices[j].toFixed(4)}" y="${deduped.vertices[j+1].toFixed(4)}" z="${deduped.vertices[j+2].toFixed(4)}" />\n`;
+            }
+            xml += `</vertices>\n<triangles>\n`;
+            for (let j = 0; j < deduped.indices.length; j += 3) {
+                xml += `  <triangle v1="${deduped.indices[j]}" v2="${deduped.indices[j+1]}" v3="${deduped.indices[j+2]}" />\n`;
+            }
+            xml += `</triangles>\n</mesh>\n</object>\n`;
+            pid++;
+        });
+
+        xml += `</resources>\n<build>\n`;
+        for (let i = 2; i < pid; i++) {
+            xml += `  <item objectid="${i}" />\n`;
+        }
+        xml += `</build>\n</model>`;
+
+        zip.file("3D/3dmodel.model", xml);
+        return await zip.generateAsync({ type: "blob" });
+    }
+
+    function rgbToHex(r, g, b) {
+        return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+    }
+</script>
+</body>
+</html>

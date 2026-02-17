@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-13.5 -13.5 27 27" width="270" height="270">
+  <!-- Numberblocks: THREE — 5 AMS colors -->
+  <!-- #FFD700 Yellow bg | #D42027 Red crown+mouth | #E09530 Orange eye circles | #FFFFFF White | #222222 Black -->
+
+  <!-- Yellow background -->
+  <rect x="-13.5" y="-13.5" width="27" height="27" fill="#FFD700"/>
+
+  <!-- Red crown (three peaks) -->
+  <polygon points="-7.5,-13.5 -7.5,-8 -4,-10.5 0,-6.5 4,-10.5 7.5,-8 7.5,-13.5" fill="#D42027"/>
+  <!-- Crown tip balls (white) -->
+  <circle cx="-4" cy="-11.2" r="1.2" fill="#FFFFFF"/>
+  <circle cx="0" cy="-7.5" r="1.2" fill="#FFFFFF"/>
+  <circle cx="4" cy="-11.2" r="1.2" fill="#FFFFFF"/>
+
+  <!-- Orange eye socket circles -->
+  <circle cx="-4.5" cy="-0.5" r="5.8" fill="#E09530"/>
+  <circle cx="4.5" cy="-0.5" r="5.8" fill="#E09530"/>
+
+  <!-- White eyes -->
+  <ellipse cx="-4.5" cy="-0.5" rx="3.5" ry="4.2" fill="#FFFFFF"/>
+  <ellipse cx="4.5" cy="-0.5" rx="3.5" ry="4.2" fill="#FFFFFF"/>
+
+  <!-- Black pupils -->
+  <circle cx="-4.8" cy="0" r="2.3" fill="#222222"/>
+  <circle cx="4.2" cy="0" r="2.3" fill="#222222"/>
+
+  <!-- Pupil highlights -->
+  <circle cx="-5.8" cy="-1.5" r="0.65" fill="#FFFFFF"/>
+  <circle cx="3.2" cy="-1.5" r="0.65" fill="#FFFFFF"/>
+
+  <!-- Red mouth (wide smile) -->
+  <ellipse cx="0" cy="7.5" rx="5.5" ry="3.5" fill="#D42027"/>
+  <!-- Teeth -->
+  <rect x="-4" y="5.5" width="8" height="2.8" rx="0.6" fill="#FFFFFF"/>
+  <!-- Mouth interior (same red) -->
+  <ellipse cx="0" cy="9" rx="4" ry="2" fill="#D42027"/>
+</svg>
